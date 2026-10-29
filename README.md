@@ -12,7 +12,7 @@ terraform {
   required_providers {
     gpupaas = {
       source  = "sharan-rafay/gpupaas"
-      version = "0.0.1-test.1"
+      version = "0.0.1-test.2"
     }
   }
 }
