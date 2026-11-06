@@ -4,7 +4,7 @@ resource "gpupaas_ssh_key" "admin" {
   metadata = {
     name      = "admin-key"
     project   = "system-catalog"
-    workspace = gpupaas_workspace.team_a.metadata.name
+    workspace = "team-a"
   }
 
   spec = {

@@ -154,15 +154,29 @@ Read-Only:
 
 Read-Only:
 
+- `assign_public_ip` (Boolean)
+- `boot_disk_size_gb` (Number)
 - `compute_type` (String)
 - `datacenter` (String)
 - `name` (String)
+- `network` (Attributes) (see [below for nested schema](#nestedatt--spec--control_plane--network))
 - `node_count` (Number)
 - `os_image` (String)
 - `scaling_mode` (String)
 - `sku_name` (String)
 - `sku_type` (String)
 - `ssh_key` (String)
+- `user_password` (String, Sensitive) Always null: the platform never returns a node password.
+
+<a id="nestedatt--spec--control_plane--network"></a>
+### Nested Schema for `spec.control_plane.network`
+
+Read-Only:
+
+- `security_group` (String)
+- `subnet` (String)
+- `vpc` (String)
+
 
 
 <a id="nestedatt--spec--networking"></a>
@@ -183,14 +197,43 @@ Read-Only:
 
 Read-Only:
 
+- `annotations` (Map of String)
+- `assign_public_ip` (Boolean)
+- `boot_disk_size_gb` (Number)
 - `datacenter` (String)
+- `labels` (Map of String)
+- `max_nodes` (Number)
+- `min_nodes` (Number)
 - `name` (String)
+- `network` (Attributes) (see [below for nested schema](#nestedatt--spec--worker_pools--network))
 - `node_count` (Number)
 - `os_image` (String)
 - `scaling_mode` (String)
 - `sku_name` (String)
 - `sku_type` (String)
 - `ssh_key` (String)
+- `taints` (Attributes List) (see [below for nested schema](#nestedatt--spec--worker_pools--taints))
+- `user_password` (String, Sensitive) Always null: the platform never returns a node password.
+
+<a id="nestedatt--spec--worker_pools--network"></a>
+### Nested Schema for `spec.worker_pools.network`
+
+Read-Only:
+
+- `security_group` (String)
+- `subnet` (String)
+- `vpc` (String)
+
+
+<a id="nestedatt--spec--worker_pools--taints"></a>
+### Nested Schema for `spec.worker_pools.taints`
+
+Read-Only:
+
+- `effect` (String)
+- `key` (String)
+- `value` (String)
+
 
 
 
@@ -200,6 +243,7 @@ Read-Only:
 Read-Only:
 
 - `action` (String)
+- `available_kubernetes_versions` (List of String)
 - `cluster_id` (String)
 - `kubernetes_version` (String)
 - `node_count` (Number)
@@ -213,6 +257,11 @@ Read-Only:
 
 Read-Only:
 
+- `arch` (String)
 - `hostname` (String)
 - `kubernetes_version` (String)
 - `node_pool` (String)
+- `operating_system` (String)
+- `private_ip` (String)
+- `roles` (List of String)
+- `status` (String)

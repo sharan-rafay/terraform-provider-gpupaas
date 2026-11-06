@@ -32,9 +32,9 @@ resource "gpupaas_bare_metal_instance" "demo" {
   }
 
   spec = {
-    type       = data.gpupaas_bare_metal_sku.gpu.name
-    image      = data.gpupaas_bare_metal_sku.gpu.default_image
-    ssh_key    = "admin-key"
+    type    = data.gpupaas_bare_metal_sku.gpu.name
+    image   = data.gpupaas_bare_metal_sku.gpu.default_image
+    ssh_key = "admin-key"
 
     # Day-2 (running machine, updated in place; the workflow re-runs for about a minute):
     # security_group  = "web-sg"   # attach, change or remove a security group of the workspace

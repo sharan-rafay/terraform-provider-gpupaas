@@ -37,15 +37,42 @@ resource "gpupaas_kubernetes_cluster" "demo" {
     kubernetes_version = "1.36" # the platform resolves the latest patch; change it to upgrade
 
     control_plane = {
-      node_count = 1 # 1, or 3 / 5 / 7 for high availability
-      ssh_key    = "cluster-key"
+      node_count = 1             # 1, or 3 for high availability; fixed once the cluster exists
+      ssh_key    = "cluster-key" # the name of an SSH key resource, never the key itself
+      # user_password = var.node_password # the alternative to ssh_key; the platform never returns it
+
+      # Controllers that place nodes per pool need a VPC and subnet for every pool. The network is fixed
+      # once the pool exists.
+      # network = { vpc = "vpc-a", subnet = "subnet-control" }
     }
 
     # Add, remove or resize pools by editing this list. Pools are identified by name.
     # worker_pools = [
-    #   { name = "gpu-pool", node_count = 2, sku_name = "bmaas-test-1", sku_type = "BMAAS" },
+    #   {
+    #     name        = "gpu-pool"
+    #     node_count  = 2
+    #     sku_name    = "bmaas-test-1"
+    #     sku_type    = "BMAAS"
+    #     network     = { vpc = "vpc-a", subnet = "subnet-gpu", security_group = "workers" }
+    #     labels      = { team = "ml" }
+    #     annotations = { owner = "ml-platform" }
+    #     taints      = [{ key = "nvidia.com/gpu", value = "true", effect = "NoSchedule" }]
+    #   },
+    #   {
+    #     # Between 1 and 5 nodes; node_count is the size the pool starts with.
+    #     name              = "cpu-pool"
+    #     scaling_mode      = "automatic"
+    #     min_nodes         = 1
+    #     max_nodes         = 5
+    #     node_count        = 2
+    #     sku_name          = "vm-small"
+    #     sku_type          = "VMAAS"
+    #     boot_disk_size_gb = 60 # virtual-machine pools only, fixed after creation
+    #     network           = { vpc = "vpc-a", subnet = "subnet-cpu" }
+    #   },
     # ]
 
+    # Tags are edited in place, without redeploying the cluster; tags set elsewhere are left alone.
     tags = { team = "platform" }
   }
 
@@ -62,6 +89,16 @@ output "kubernetes_version" {
 
 output "nodes" {
   value = gpupaas_kubernetes_cluster.demo.status.nodes
+}
+
+output "upgrade_targets" {
+  description = "Versions the cluster can be upgraded to."
+  value       = gpupaas_kubernetes_cluster.demo.status.available_kubernetes_versions
+}
+
+output "node_addresses" {
+  description = "Private IP and role of every node (reported by controllers of release v3.1.41 and later)."
+  value       = [for n in gpupaas_kubernetes_cluster.demo.status.nodes : "${n.hostname} ${n.private_ip} ${try(join(",", n.roles), "")}"]
 }
 ```
 
@@ -168,7 +205,7 @@ Read-Only:
 
 Required:
 
-- `control_plane` (Attributes) The control-plane nodes. Use 1 node, or 3, 5 or 7 for high availability. (see [below for nested schema](#nestedatt--spec--control_plane))
+- `control_plane` (Attributes) The control-plane nodes: 1 node, or 3 for high availability. The size is fixed once the cluster exists (the platform cannot convert a cluster to high availability), so create it with 3 nodes if you need that. (see [below for nested schema](#nestedatt--spec--control_plane))
 - `kubernetes_version` (String) Kubernetes version, for example `1.36` (the platform resolves the latest patch) or `v1.36.4`. Changing it upgrades the cluster.
 - `profile_name` (String) The cluster profile (Kubernetes SKU) to create the cluster from. Changing it replaces the cluster.
 
@@ -177,7 +214,7 @@ Optional:
 - `blueprint` (Attributes) Blueprint applied to the cluster. Defaults to the profile's blueprint. (see [below for nested schema](#nestedatt--spec--blueprint))
 - `contract_term` (String) Billing contract term in months (`0` is on demand). Must be one the profile allows.
 - `location` (String) Datacenter the cluster is placed in. Defaults to the profile's datacenter.
-- `networking` (Attributes) Network settings. Defaults come from the profile. (see [below for nested schema](#nestedatt--spec--networking))
+- `networking` (Attributes) Network settings. Defaults come from the profile. Controllers of release v3.1.41 and later place nodes per pool and clear the cluster-level `vpc` and `subnet`: set `network` on each pool instead. (see [below for nested schema](#nestedatt--spec--networking))
 - `tags` (Map of String) Tags for the cluster.
 - `worker_pools` (Attributes List) Worker node pools. Add, remove or resize pools by editing this list; pools are identified by `name`. (see [below for nested schema](#nestedatt--spec--worker_pools))
 
@@ -186,21 +223,38 @@ Optional:
 
 Required:
 
-- `node_count` (Number) Number of nodes.
+- `node_count` (Number) Number of control-plane nodes: `1`, or `3` for high availability. It cannot change once the cluster exists.
 
 Optional:
 
-- `datacenter` (String) Datacenter for the nodes. Defaults to the cluster `location`.
+- `assign_public_ip` (Boolean) Give the nodes a public IP. The platform assigns public IPs to all worker nodes or to none, so every worker pool must carry the same value.
+- `boot_disk_size_gb` (Number) Boot disk of each node in GB, for pools of virtual machines only (bare-metal pools refuse it). It must lie inside the range of the compute SKU. Fixed once the pool exists.
+- `datacenter` (String) Datacenter of the nodes. Nodes are always placed in the cluster's `location`, so this must be left out or equal to it: a per-pool datacenter is not supported.
 - `name` (String) Name of the control-plane group.
-- `os_image` (String) Operating system image, one of the profile's images. Defaults to the profile's default image.
-- `scaling_mode` (String) Scaling mode; `manual` is the supported mode.
-- `sku_name` (String) Compute SKU for the nodes (a bare-metal or VM profile name), one of the profile's SKUs. Defaults to the profile's default SKU.
-- `sku_type` (String) `BMAAS` (bare metal) or `VMAAS` (virtual machines).
-- `ssh_key` (String) Name of an existing SSH key of the workspace to install on the nodes.
+- `network` (Attributes) VPC, subnet and security group of the nodes. Controllers that place nodes per pool require `vpc` and `subnet` for every new pool. The network is fixed once the pool exists: to use another one, add a new pool and remove the old one. (see [below for nested schema](#nestedatt--spec--control_plane--network))
+- `os_image` (String) Operating system image, one of the profile's images. Defaults to the profile's default image. Changing it on an existing pool re-images the pool's nodes (a rolling replacement).
+- `scaling_mode` (String) Scaling mode; the control plane is always `manual`.
+- `sku_name` (String) Compute SKU for the nodes (a bare-metal or VM profile name), one of the profile's SKUs. Defaults to the profile's default SKU. The GPU model and the GPU count per node come from the SKU (for a VM SKU from the preset whose name is the `sku_name`); a pool cannot choose them.
+- `sku_type` (String) `BMAAS` (bare metal) or `VMAAS` (virtual machines). The platform stamps it from the SKU.
+- `ssh_key` (String) Name of an existing SSH key resource of the workspace to install on the nodes; an inline public key is not accepted. The platform installs one key per cluster: when pools name different keys, the control plane's key is used.
+- `user_password` (String, Sensitive) Login password of the nodes (alternative to `ssh_key`). The platform never returns it, so Terraform cannot detect a change made elsewhere. After an `import`, a configured password counts as a change and is sent on the next apply, which redeploys the cluster.
 
 Read-Only:
 
-- `compute_type` (String) `CPU` or `GPU`, derived by the platform from the SKU.
+- `compute_type` (String) `CPU`, `GPU` or `CUSTOM` (a bare-metal SKU without a catalog GPU), derived by the platform from the SKU.
+
+<a id="nestedatt--spec--control_plane--network"></a>
+### Nested Schema for `spec.control_plane.network`
+
+Required:
+
+- `subnet` (String) Subnet in that VPC.
+- `vpc` (String) Name of the VPC.
+
+Optional:
+
+- `security_group` (String) Name of a security group for the nodes. The platform does not check that it exists.
+
 
 
 <a id="nestedatt--spec--blueprint"></a>
@@ -231,16 +285,51 @@ Optional:
 Required:
 
 - `name` (String) Name of the worker pool. It identifies the pool: renaming one removes it and adds a new one.
-- `node_count` (Number) Number of nodes.
+- `node_count` (Number) Number of nodes. With `scaling_mode = "automatic"` it is the size the pool starts with: the autoscaler then moves the size between `min_nodes` and `max_nodes`, and Terraform does not set it back.
 
 Optional:
 
-- `datacenter` (String) Datacenter for the nodes. Defaults to the cluster `location`.
-- `os_image` (String) Operating system image, one of the profile's images. Defaults to the profile's default image.
-- `scaling_mode` (String) Scaling mode; `manual` is the supported mode.
-- `sku_name` (String) Compute SKU for the nodes (a bare-metal or VM profile name), one of the profile's SKUs. Defaults to the profile's default SKU.
-- `sku_type` (String) `BMAAS` (bare metal) or `VMAAS` (virtual machines).
-- `ssh_key` (String) Name of an existing SSH key of the workspace to install on the nodes.
+- `annotations` (Map of String) Kubernetes annotations of the pool's nodes. The map replaces the pool's annotations.
+- `assign_public_ip` (Boolean) Give the nodes a public IP. The platform assigns public IPs to all worker nodes or to none, so every worker pool must carry the same value.
+- `boot_disk_size_gb` (Number) Boot disk of each node in GB, for pools of virtual machines only (bare-metal pools refuse it). It must lie inside the range of the compute SKU. Fixed once the pool exists.
+- `datacenter` (String) Datacenter of the nodes. Nodes are always placed in the cluster's `location`, so this must be left out or equal to it: a per-pool datacenter is not supported.
+- `labels` (Map of String) Kubernetes labels of the pool's nodes. The map replaces the pool's labels.
+- `max_nodes` (Number) Largest size of an automatic pool. Only with `scaling_mode = "automatic"`.
+- `min_nodes` (Number) Smallest size of an automatic pool. Only with `scaling_mode = "automatic"`.
+- `network` (Attributes) VPC, subnet and security group of the nodes. Controllers that place nodes per pool require `vpc` and `subnet` for every new pool. The network is fixed once the pool exists: to use another one, add a new pool and remove the old one. (see [below for nested schema](#nestedatt--spec--worker_pools--network))
+- `os_image` (String) Operating system image, one of the profile's images. Defaults to the profile's default image. Changing it on an existing pool re-images the pool's nodes (a rolling replacement).
+- `scaling_mode` (String) `manual` (a fixed `node_count`, the default) or `automatic` (between `min_nodes` and `max_nodes`).
+- `sku_name` (String) Compute SKU for the nodes (a bare-metal or VM profile name), one of the profile's SKUs. Defaults to the profile's default SKU. The GPU model and the GPU count per node come from the SKU (for a VM SKU from the preset whose name is the `sku_name`); a pool cannot choose them.
+- `sku_type` (String) `BMAAS` (bare metal) or `VMAAS` (virtual machines). The platform stamps it from the SKU.
+- `ssh_key` (String) Name of an existing SSH key resource of the workspace to install on the nodes; an inline public key is not accepted. The platform installs one key per cluster: when pools name different keys, the control plane's key is used.
+- `taints` (Attributes List) Kubernetes taints of the pool's nodes. The list replaces the pool's taints. (see [below for nested schema](#nestedatt--spec--worker_pools--taints))
+- `user_password` (String, Sensitive) Login password of the nodes (alternative to `ssh_key`). The platform never returns it, so Terraform cannot detect a change made elsewhere. After an `import`, a configured password counts as a change and is sent on the next apply, which redeploys the cluster.
+
+<a id="nestedatt--spec--worker_pools--network"></a>
+### Nested Schema for `spec.worker_pools.network`
+
+Required:
+
+- `subnet` (String) Subnet in that VPC.
+- `vpc` (String) Name of the VPC.
+
+Optional:
+
+- `security_group` (String) Name of a security group for the nodes. The platform does not check that it exists.
+
+
+<a id="nestedatt--spec--worker_pools--taints"></a>
+### Nested Schema for `spec.worker_pools.taints`
+
+Required:
+
+- `effect` (String) `NoSchedule`, `PreferNoSchedule` or `NoExecute`.
+- `key` (String)
+
+Optional:
+
+- `value` (String)
+
 
 
 
@@ -260,6 +349,7 @@ Optional:
 Read-Only:
 
 - `action` (String)
+- `available_kubernetes_versions` (List of String) Versions the cluster can be upgraded to: one minor version at a time, never a downgrade.
 - `cluster_id` (String) Identifier of the cluster in the Kubernetes management plane.
 - `kubernetes_version` (String) Exact Kubernetes version the cluster runs, for example `v1.36.4`.
 - `node_count` (Number) Number of nodes registered with the cluster.
@@ -273,9 +363,14 @@ Read-Only:
 
 Read-Only:
 
+- `arch` (String)
 - `hostname` (String)
 - `kubernetes_version` (String)
 - `node_pool` (String) `master` for control-plane nodes, otherwise the worker pool name.
+- `operating_system` (String)
+- `private_ip` (String) Private IP of the node. Null on controllers older than release v3.1.41.
+- `roles` (List of String) `Master` and/or `Worker`.
+- `status` (String) The platform's own status word for the node, for example `READY`.
 
 ## Import
 

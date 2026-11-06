@@ -41,6 +41,7 @@ output "datacenters" {
 
 ### Read-Only
 
+- `contract_terms_months` (List of Number) Billing contract terms in months a cluster may pick.
 - `control_plane` (Attributes) What the profile allows for control-plane nodes. (see [below for nested schema](#nestedatt--control_plane))
 - `datacenters` (List of String)
 - `default_blueprint` (Attributes) (see [below for nested schema](#nestedatt--default_blueprint))
@@ -49,6 +50,8 @@ output "datacenters" {
 - `default_pod_subnet` (String)
 - `default_service_subnet` (String)
 - `default_ssh_key` (String)
+- `expose_ssh_key_choice` (Boolean) When true, a new cluster needs a node password or an SSH key (on the control plane or on a pool), unless the SKU has a default.
+- `has_default_user_password` (Boolean) True when the SKU holds a default node password (the platform never shows it).
 - `id` (String) The ID of this resource.
 - `supported_cnis` (Attributes List) (see [below for nested schema](#nestedatt--supported_cnis))
 - `supported_kubernetes_versions` (List of String)

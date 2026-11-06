@@ -15,7 +15,7 @@ The user kubeconfig of a running first-class managed Kubernetes cluster, the sam
 ```terraform
 # The kubeconfig of a running cluster, as the console's "Download Kubeconfig" gives it.
 data "gpupaas_kubernetes_cluster_kubeconfig" "k" {
-  name      = gpupaas_kubernetes_cluster.c.metadata.name
+  name      = "demo-cluster"
   project   = "system-catalog"
   workspace = "team-a"
 }

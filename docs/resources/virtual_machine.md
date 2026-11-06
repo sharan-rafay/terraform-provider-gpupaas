@@ -35,9 +35,9 @@ resource "gpupaas_virtual_machine" "demo" {
     type = data.gpupaas_virtual_machine_sku.small.name
     # A size is one of the SKU's presets. Name it here, or set cpu_count and memory (and gpu_count)
     # to the values of one preset row. A SKU with a single preset needs neither.
-    preset         = data.gpupaas_virtual_machine_sku.small.presets[0].name
-    image          = data.gpupaas_virtual_machine_sku.small.default_image
-    ssh_key        = "admin-key"
+    preset  = data.gpupaas_virtual_machine_sku.small.presets[0].name
+    image   = data.gpupaas_virtual_machine_sku.small.default_image
+    ssh_key = "admin-key"
 
     # Day-2 (running VM, updated in place): attach, change or remove a security group of the workspace.
     # security_group = "web-sg"

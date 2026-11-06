@@ -4,7 +4,7 @@ resource "gpupaas_security_group" "web" {
   metadata = {
     name      = "web"
     project   = "system-catalog"
-    workspace = gpupaas_workspace.team_a.metadata.name
+    workspace = "team-a"
   }
 
   spec = {
